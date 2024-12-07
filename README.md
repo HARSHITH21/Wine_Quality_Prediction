@@ -1,16 +1,197 @@
-# wine-quality-prediction
-Cluster Configuration
-Steps:
-Launch an EMR Cluster:
+Here’s the corrected and updated **README.md** based on your provided details:
 
-Navigate to the EMR section in the AWS Console.
-Create a cluster with:
-1 Master Node and 4 Slave Nodes.
-Select applications: Spark, Hadoop.
-Choose an EC2 key pair for SSH access (create one if needed).
-Once launched, note the Master Node DNS and login details.
-Install Required Libraries:
+---
 
-SSH into the Master Node.
-Install additional Java dependencies if necessary (e.g., libraries for Spark MLlib).
-Ensure that all configurations are synced across nodes.
+# Wine Quality Prediction using Parallel Machine Learning on AWS
+
+## Overview
+This project involves developing a parallel machine learning application on the Amazon AWS cloud platform using Apache Spark. The goal is to train a wine quality prediction model in parallel across multiple EC2 instances, load and save the model for predictions, and deploy the model using Docker.
+
+## Dataset
+The project uses the following datasets:
+- **TrainingDataset.csv**: Used for training the model in parallel on 4 EC2 instances.
+- **ValidationDataset.csv**: Used for model validation and optimization of model parameters.
+- **TestDataset.csv**: Used for testing prediction functionality and performance (not provided; validation dataset can be used for testing).
+
+## Goal
+The main objective is to build and deploy a machine learning model that predicts wine quality, using parallel computing to train the model on AWS. The project will output the F1 score to measure prediction performance.
+
+## Technologies and Tools
+- **Amazon EC2**: Used for running Spark and distributing tasks across multiple instances.
+- **Apache Spark**: Distributed computing framework used for parallel training and prediction.
+- **Java**: Programming language for implementation.
+- **Docker**: Containerization tool for deploying the trained model.
+- **Spark MLlib**: Spark's built-in library for machine learning to train and validate models.
+
+---
+
+## Cluster Configuration
+
+### Step 1: Launch the EMR Cluster
+- **Go to the AWS Management Console**.
+- Navigate to **EMR (Elastic MapReduce)** and click **Create Cluster**.
+- **Configure the cluster**:
+  - **Applications**: Select **Spark** and **Hadoop**.
+  - **Instance Types**: Choose instance types for your master and slave nodes (e.g., m5.xlarge).
+  - **Number of Instances**: Set 1 master and 4 slave nodes.
+  - **Key Pair**: Select an existing key pair or create a new one for SSH access.
+- Launch the cluster and wait for it to start.
+
+### Step 2: SSH into the Master Node
+- Obtain the **Master Node DNS** from the EMR cluster details in the AWS Console.
+- Open a terminal on your local machine and connect to the master node via SSH:
+```bash
+ssh -i your-key.pem hadoop@<MasterNodeDNS>
+```
+
+### Step 3: Verify PySpark Installation
+- Check if **PySpark** is installed by running:
+```bash
+pyspark
+```
+- If PySpark starts successfully, you will see the Spark shell prompt.
+- To exit the Spark shell, type:
+```bash
+exit()
+```
+
+### Step 4: Configure Environment Variables
+- Ensure Spark and Hadoop are properly configured by checking the environment variables.
+- View the `~/.bashrc` file to confirm Spark and Hadoop paths:
+```bash
+cat ~/.bashrc
+```
+- Add the following lines if they are missing:
+```bash
+echo "export SPARK_HOME=/usr/lib/spark" >> ~/.bashrc
+echo "export PATH=\$SPARK_HOME/bin:\$PATH" >> ~/.bashrc
+echo "export HADOOP_HOME=/usr/lib/hadoop" >> ~/.bashrc
+echo "export PATH=\$HADOOP_HOME/bin:\$PATH" >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Step 5: Test PySpark with a Simple Script
+- Create a test PySpark script:
+```bash
+nano test_pyspark.py
+```
+- Add the following code to the file:
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.appName("TestPySpark").getOrCreate()
+data = [("Alice", 34), ("Bob", 45), ("Cathy", 29)]
+df = spark.createDataFrame(data, ["Name", "Age"])
+df.show()
+spark.stop()
+```
+- Run the script:
+```bash
+spark-submit test_pyspark.py
+```
+
+### Step 6: Validate Cluster Configuration
+- Ensure Spark can utilize multiple nodes by checking cluster details:
+```bash
+yarn node -list
+```
+- This should list the master and slave nodes.
+
+- Check available Spark resources:
+```bash
+spark-submit --status
+```
+
+### Step 7: Upload Datasets to S3
+- Open the AWS Console and go to **S3**.
+- Upload the datasets **TrainingDataset.csv** and **ValidationDataset.csv** to your S3 bucket.
+- Alternatively, you can upload the datasets using the AWS CLI:
+```bash
+aws s3 cp TrainingDataset.csv s3://aws-logs-065870645303-us-east-1/
+aws s3 cp ValidationDataset.csv s3://aws-logs-065870645303-us-east-1/
+```
+- Test S3 Access:
+```bash
+aws s3 ls s3://aws-logs-065870645303-us-east-1
+```
+
+### Step 8: Train the Model on EC2
+- SSH into the master node and run the training script:
+```bash
+spark-submit wine_quality_training.py
+```
+- Ensure that the model is trained and saved to a directory.
+
+---
+
+## Docker Setup for Prediction
+
+### Step 1: Create the Dockerfile
+
+Create a **Dockerfile** to define the application environment. The container will include dependencies like Apache Spark, Python, and necessary libraries for the model.
+
+#### Dockerfile
+
+```dockerfile
+# Use an official Python base image
+FROM python:3.8-slim
+
+# Set environment variables
+ENV PATH="/opt/miniconda3/bin:${PATH}"
+ENV PYSPARK_PYTHON="/opt/miniconda3/bin/python"
+ENV SPARK_HOME="/opt/spark"
+
+# Install required packages
+RUN apt-get update && apt-get install -y curl bzip2 wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda for managing Python environments
+RUN curl -s -L --url "https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh" --output /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -f -p "/opt/miniconda3" && \
+    rm /tmp/miniconda.sh && \
+    conda config --set auto_update_conda true && \
+    conda config --set channel_priority false && \
+    conda update conda -y --force-reinstall && \
+    conda clean -tipy && \
+    echo "PATH=/opt/miniconda3/bin:\${PATH}" > /etc/profile.d/miniconda.sh
+
+# Install Spark and Hadoop
+RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-3.4.0/spark-3.4.0-bin-hadoop3.tgz" && \
+    tar -xzf apache-spark.tgz -C /opt && \
+    rm apache-spark.tgz
+
+# Install required Python packages
+RUN pip install --no-cache-dir pyspark==3.4.0 numpy pandas boto3
+
+# Copy the application files into the container
+COPY validate_and_evaluate.py /opt/
+COPY ValidationDataset.csv /opt/
+COPY model /opt/spark-model/
+
+# Set the entry point to run the Spark application
+CMD ["spark-submit", "/opt/validate_and_evaluate.py", "/opt/ValidationDataset.csv"]
+```
+
+### Step 2: Build the Docker Image
+- After creating the Dockerfile, build the Docker image:
+```bash
+docker build -t wine-quality-app .
+```
+
+### Step 3: Run the Docker Container
+- Once the Docker image is built, you can run the container:
+```bash
+docker run -it wine-quality-app
+```
+- This will execute the prediction process using Spark inside the container.
+
+### Step 4: Running the Prediction on EC2 (Optional)
+- Alternatively, you can run the prediction directly on EC2 without Docker:
+```bash
+spark-submit --master yarn --deploy-mode client /opt/validate_and_evaluate.py
+```
+
+---
+
+## Conclusion
+This project successfully demonstrates parallel machine learning on AWS using Apache Spark. The training is done on multiple EC2 instances using Spark's distributed computing capabilities, and the trained model is deployed in a Docker container for easy prediction deployment. The entire process leverages AWS's powerful infrastructure and Spark's capabilities to handle large datasets efficiently.
+
