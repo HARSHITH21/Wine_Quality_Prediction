@@ -1,6 +1,3 @@
-Here’s the corrected and updated **README.md** based on your provided details:
-
----
 
 # Wine Quality Prediction using Parallel Machine Learning on AWS
 
