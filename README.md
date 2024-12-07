@@ -1,5 +1,5 @@
 
-# Wine Quality Prediction using Parallel Machine Learning on AWS
+# Wine Quality Prediction on AWS
 
 ## Overview
 This project involves developing a parallel machine learning application on the Amazon AWS cloud platform using Apache Spark. The goal is to train a wine quality prediction model in parallel across multiple EC2 instances, load and save the model for predictions, and deploy the model using Docker.
