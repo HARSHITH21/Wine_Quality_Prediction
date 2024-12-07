@@ -129,45 +129,6 @@ Create a **Dockerfile** to define the application environment. The container wil
 
 #### Dockerfile
 
-```dockerfile
-# Use an official Python base image
-FROM python:3.8-slim
-
-# Set environment variables
-ENV PATH="/opt/miniconda3/bin:${PATH}"
-ENV PYSPARK_PYTHON="/opt/miniconda3/bin/python"
-ENV SPARK_HOME="/opt/spark"
-
-# Install required packages
-RUN apt-get update && apt-get install -y curl bzip2 wget unzip --no-install-recommends && rm -rf /var/lib/apt/lists/*
-
-# Install Miniconda for managing Python environments
-RUN curl -s -L --url "https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh" --output /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -f -p "/opt/miniconda3" && \
-    rm /tmp/miniconda.sh && \
-    conda config --set auto_update_conda true && \
-    conda config --set channel_priority false && \
-    conda update conda -y --force-reinstall && \
-    conda clean -tipy && \
-    echo "PATH=/opt/miniconda3/bin:\${PATH}" > /etc/profile.d/miniconda.sh
-
-# Install Spark and Hadoop
-RUN wget --no-verbose -O apache-spark.tgz "https://archive.apache.org/dist/spark/spark-3.4.0/spark-3.4.0-bin-hadoop3.tgz" && \
-    tar -xzf apache-spark.tgz -C /opt && \
-    rm apache-spark.tgz
-
-# Install required Python packages
-RUN pip install --no-cache-dir pyspark==3.4.0 numpy pandas boto3
-
-# Copy the application files into the container
-COPY validate_and_evaluate.py /opt/
-COPY ValidationDataset.csv /opt/
-COPY model /opt/spark-model/
-
-# Set the entry point to run the Spark application
-CMD ["spark-submit", "/opt/validate_and_evaluate.py", "/opt/ValidationDataset.csv"]
-```
-
 ### Step 2: Build the Docker Image
 - After creating the Dockerfile, build the Docker image:
 ```bash
